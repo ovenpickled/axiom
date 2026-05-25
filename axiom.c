@@ -18,7 +18,8 @@
 
 /*** defines ***/
 #define AXIOM_VERSION "0.0.1"
-#define KILO_TAB_STOP 8
+#define AXIOM_TAB_STOP 8
+#define AXIOM_QUIT_TIMES 3
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -179,7 +180,7 @@ int editorRowCxToRx(erow *row, int cx) {
   int j;
   for (j = 0; j < cx; j++) {
     if (row -> chars[j] == '\t')
-      rx += (KILO_TAB_STOP - 1) - (rx % KILO_TAB_STOP);
+      rx += (AXIOM_TAB_STOP - 1) - (rx % AXIOM_TAB_STOP);
     rx++;
   }
   return rx;
@@ -192,13 +193,13 @@ void editorUpdateRow(erow *row) {
     if (row -> chars[j] == '\t') tabs++;
 
   free(row -> render);
-  row -> render = malloc(row -> size + tabs * (KILO_TAB_STOP - 1) + 1);
+  row -> render = malloc(row -> size + tabs * (AXIOM_TAB_STOP - 1) + 1);
 
   int idx = 0;
   for (j = 0; j < row -> size; j++) {
     if (row -> chars[j] == '\t') {
       row -> render[idx++] = ' ';
-      while (idx % KILO_TAB_STOP != 0) row -> render[idx++] = ' ';
+      while (idx % AXIOM_TAB_STOP != 0) row -> render[idx++] = ' ';
     }else {
       row -> render[idx++] = row -> chars[j];
     }
@@ -477,6 +478,7 @@ void editorMoveCursor(int key) {
 }
 
 void editorProcessKeypress() {
+  static int quit_times = AXIOM_QUIT_TIMES;
   int c = editorReadKey();
 
   switch (c) {
@@ -484,6 +486,12 @@ void editorProcessKeypress() {
       /* TODO */
       break;
     case CTRL_KEY('q'):
+      if (E.dirty && quit_times > 0) {
+        editorSetStatusMessage("WARNING!!! File has unsaved changes. "
+                               "Press Ctrl-Q %d more times to quit.", quit_times);
+        quit_times--;
+        return;
+      }
       write(STDOUT_FILENO, "\x1b[2J", 4);
       write(STDOUT_FILENO, "\x1b[H", 3);
       exit(0);
@@ -538,6 +546,7 @@ void editorProcessKeypress() {
       editorInsertChar(c);
       break;
   }
+  quit_times = AXIOM_QUIT_TIMES;
 }
 
 /*** init ***/
