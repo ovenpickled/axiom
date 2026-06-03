@@ -79,6 +79,7 @@ struct editorConfig {
   int screenrows;
   int screencols;
   int numrows;
+  int linenum_width;
   erow *row;
   int dirty;
   char *filename;
@@ -177,6 +178,7 @@ struct editorSyntax HLDB[] = {
 void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen();
 char *editorPrompt(char *prompt, void (*callback)(char *, int));
+void editorUpdateLinenumWidth();
 
 /*** terminal ***/
 void die(const char *s) {
@@ -638,6 +640,7 @@ void editorOpen(char *filename) {
   free(line);
   fclose(fp);
   E.dirty = 0;
+  editorUpdateLinenumWidth();
 }
 
 void editorSave() {
@@ -781,6 +784,18 @@ void editorScroll() {
   }
 }
 
+void editorUpdateLinenumWidth() {
+  int old_width = E.linenum_width;
+
+  int digits = 0;
+  int n = (E.numrows > 0) ? E.numrows : 1;
+  while (n) { digits++; n /= 10; }
+  E.linenum_width = digits + 2;
+
+  E.screencols += old_width;
+  E.screencols -= E.linenum_width;
+}
+
 void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
@@ -802,6 +817,12 @@ void editorDrawRows(struct abuf *ab) {
         abAppend(ab, "~", 1);
       }
     } else {
+      char linenum[16];
+      int linelen = snprintf(linenum, sizeof(linenum), " %d ", filerow + 1);
+      abAppend(ab, "\x1b[90m", 5);
+      abAppend(ab, linenum, linelen);
+      abAppend(ab, "\x1b[39m", 5);
+
       int len = E.row[filerow].rsize - E.coloff;
       if (len < 0) len = 0;
       if (len > E.screencols) len = E.screencols;
@@ -1074,6 +1095,8 @@ void initEditor() {
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
   E.screenrows -= 2;
+  E.linenum_width = 0;
+  editorUpdateLinenumWidth();
 }
 
 int main(int argc, char *argv[]) {
