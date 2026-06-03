@@ -182,7 +182,7 @@ int editorReadKey() {
           case 'F': return END_KEY;
         }
       }
-    } else if (seq[0] == '0') {
+    } else if (seq[0] == 'O') {
       switch (seq[1]) {
         case 'H': return HOME_KEY;
         case 'F': return END_KEY;
@@ -905,7 +905,7 @@ void editorMoveCursor(int key) {
       }
       break;
     case ARROW_DOWN:
-      if (E.cy < E.screenrows) {
+      if (E.cy < E.numrows) {
         E.cy++;
       }
       break;
