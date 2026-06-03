@@ -100,11 +100,72 @@ char *C_HL_keywords[] = {
   "void|", NULL
 };
 
+/*** Python ***/
+char *PYTHON_HL_extensions[] = { ".py", NULL };
+char *PYTHON_HL_keywords[] = {
+  "and", "as", "assert", "break", "class", "continue", "def", "del",
+  "elif", "else", "except", "finally", "for", "from", "global", "if",
+  "import", "in", "is", "lambda", "nonlocal", "not", "or", "pass",
+  "raise", "return", "try", "while", "with", "yield",
+
+  "bool|", "bytes|", "dict|", "float|", "int|", "list|", "None|",
+  "set|", "str|", "tuple|", NULL
+};
+
+/*** Go ***/
+char *GO_HL_extensions[] = { ".go", NULL };
+char *GO_HL_keywords[] = {
+  "break", "case", "chan", "const", "continue", "default", "defer",
+  "else", "fallthrough", "for", "func", "go", "goto", "if", "import",
+  "interface", "map", "package", "range", "return", "select", "struct",
+  "switch", "type", "var",
+
+  "bool|", "byte|", "complex64|", "complex128|", "error|", "float32|",
+  "float64|", "int|", "int8|", "int16|", "int32|", "int64|", "rune|",
+  "string|", "uint|", "uint8|", "uint16|", "uint32|", "uint64|",
+  "uintptr|", NULL
+};
+
+/*** Rust ***/
+char *RUST_HL_extensions[] = { ".rs", NULL };
+char *RUST_HL_keywords[] = {
+  "as", "break", "const", "continue", "crate", "else", "enum", "extern",
+  "false", "fn", "for", "if", "impl", "in", "let", "loop", "match",
+  "mod", "move", "mut", "pub", "ref", "return", "self", "Self", "static",
+  "struct", "super", "trait", "true", "type", "unsafe", "use", "where",
+  "while",
+
+  "bool|", "char|", "f32|", "f64|", "i8|", "i16|", "i32|", "i64|",
+  "i128|", "isize|", "str|", "u8|", "u16|", "u32|", "u64|", "u128|",
+  "usize|", "String|", "Vec|", NULL
+};
+
 struct editorSyntax HLDB[] = {
   {
     "c",
     C_HL_extensions,
     C_HL_keywords,
+    "//", "/*", "*/",
+    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
+  },
+  {
+    "python",
+    PYTHON_HL_extensions,
+    PYTHON_HL_keywords,
+    "#", NULL, NULL,
+    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
+  },
+  {
+    "go",
+    GO_HL_extensions,
+    GO_HL_keywords,
+    "//", "/*", "*/",
+    HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
+  },
+  {
+    "rust",
+    RUST_HL_extensions,
+    RUST_HL_keywords,
     "//", "/*", "*/",
     HL_HIGHLIGHT_NUMBERS | HL_HIGHLIGHT_STRINGS
   },
