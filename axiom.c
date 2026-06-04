@@ -907,7 +907,7 @@ void editorRefreshScreen() {
   editorDrawMessageBar(&ab);
 
   char buf[32];
-  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, (E.rx - E.coloff) + 1);
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, (E.rx - E.coloff) + 1 + E.linenum_width);
   abAppend(&ab, buf, strlen(buf));
 
   abAppend(&ab, "\x1b[?25h", 6);
@@ -1041,8 +1041,27 @@ void editorProcessKeypress() {
     case BACKSPACE:
     case CTRL_KEY('h'):
     case DEL_KEY:
-      if (c == DEL_KEY) editorMoveCursor(ARROW_RIGHT);
-      editorDelChar();
+      if (c == DEL_KEY) {
+        editorMoveCursor(ARROW_RIGHT);
+        editorDelChar();
+      } else {
+        if (E.cx > 0 && E.cy < E.numrows) {
+          erow *row = &E.row[E.cy];
+          int spaces = E.cx % AXIOM_TAB_STOP;
+          if (spaces == 0) spaces = AXIOM_TAB_STOP;
+          int can_delete = 1;
+          for (int i = E.cx - spaces; i < E.cx; i++) {
+            if (row->chars[i] != ' ') { can_delete = 0; break; }
+          }
+          if (can_delete) {
+            while (spaces--) editorDelChar();
+          } else {
+            editorDelChar();
+          }
+        } else {
+          editorDelChar();
+        }
+      }
       break;
 
     case PAGE_UP:
@@ -1069,6 +1088,14 @@ void editorProcessKeypress() {
 
     case CTRL_KEY('l'):
     case '\x1b':
+      break;
+
+    case '\t':
+      {
+    int spaces = AXIOM_TAB_STOP - (E.cx % AXIOM_TAB_STOP);
+    while (spaces--)
+      editorInsertChar(' ');
+      }
       break;
 
     default:
