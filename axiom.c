@@ -516,6 +516,7 @@ void editorInsertRow(int at, char *s, size_t len) {
 
   E.numrows++;
   E.dirty++;
+  editorUpdateLinenumWidth();
 }
 
 void editorFreeRow(erow *row) {
@@ -531,6 +532,7 @@ void editorDelRow(int at) {
   for (int j = at; j < E.numrows - 1; j++) E.row[j].idx--;
   E.numrows--;
   E.dirty++;
+  editorUpdateLinenumWidth();
 }
 
 void editorRowInsertChar(erow *row, int at, int c) {
@@ -570,10 +572,17 @@ void editorInsertChar(int c) {
 }
 
 void editorInsertNewLine() {
+  erow *row = &E.row[E.cy];
+
+  int indent = 0;
+  if (E.cy < E.numrows) {
+    while (indent < row -> size && row -> chars[indent] == ' ')
+      indent++;
+  }
+
   if (E.cx == 0) {
     editorInsertRow(E.cy, "", 0);
   } else {
-    erow *row = &E.row[E.cy];
     editorInsertRow(E.cy + 1, &row -> chars[E.cx], row -> size - E.cx);
     row = &E.row[E.cy];
     row -> size = E.cx;
@@ -582,6 +591,20 @@ void editorInsertNewLine() {
   }
   E.cy++;
   E.cx = 0;
+
+  if (indent > 0) {
+    erow *newrow = &E.row[E.cy];
+    newrow -> chars = realloc(newrow -> chars, newrow -> size + indent + 1);
+    memmove(&newrow -> chars[indent], newrow -> chars, newrow -> size);
+    memset(newrow -> chars, ' ', indent);
+    newrow -> size += indent;
+    newrow -> chars[newrow -> size] = '\0';
+    editorUpdateRow(newrow);
+    E.cx = indent;
+  }
+
+  if (E.cy < E.numrows)
+    E.rx = editorRowCxToRx(&E.row[E.cy], E.cx);
 }
 
 void editorDelChar() {
@@ -818,7 +841,8 @@ void editorDrawRows(struct abuf *ab) {
       }
     } else {
       char linenum[16];
-      int linelen = snprintf(linenum, sizeof(linenum), " %d ", filerow + 1);
+      int digits = E.linenum_width - 2;
+      int linelen = snprintf(linenum, sizeof(linenum), " %*d ", digits, filerow + 1);
       abAppend(ab, "\x1b[90m", 5);
       abAppend(ab, linenum, linelen);
       abAppend(ab, "\x1b[39m", 5);
