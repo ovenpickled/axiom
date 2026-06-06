@@ -87,6 +87,8 @@ struct editorConfig {
   int dirty;
   char *filename;
   char statusmsg[80];
+  char *clipboard;
+  int clipboard_len;
   time_t statusmsg_time;
   struct editorSyntax *syntax;
   struct termios orig_termios;
@@ -182,6 +184,8 @@ void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen();
 char *editorPrompt(char *prompt, void (*callback)(char *, int));
 void editorUpdateLinenumWidth();
+void editorCopyLine();
+void editorPasteLine();
 
 /*** terminal ***/
 void die(const char *s) {
@@ -646,6 +650,34 @@ void editorDelChar() {
   }
 }
 
+void editorCopyLine() {
+  if (E.cy >= E.numrows) return;
+  erow *row = &E.row[E.cy];
+  free(E.clipboard);
+  E.clipboard = malloc(row->size + 1);
+  memcpy(E.clipboard, row->chars, row->size);
+  E.clipboard[row->size] = '\0';
+  E.clipboard_len = row->size;
+  editorSetStatusMessage("Line copied");
+}
+
+void editorPasteLine() {
+  if (E.clipboard == NULL) {
+    editorSetStatusMessage("Nothing to paste");
+    return;
+  }
+  if (E.numrows == 0) {
+    editorInsertRow(0, E.clipboard, E.clipboard_len);
+    E.cy = 0;
+  } else {
+    editorInsertRow(E.cy + 1, E.clipboard, E.clipboard_len);
+    E.cy++;
+  }
+  E.coloff = 0;
+  E.cx = E.row[E.cy].size;
+  editorSetStatusMessage("Line pasted");
+}
+
 /*** file i/o ***/
 char *editorRowsToString(int *buflen) {
   int totlen = 0;
@@ -1062,6 +1094,7 @@ void editorProcessKeypress() {
         quit_times--;
         return;
       }
+      free(E.clipboard);
       write(STDOUT_FILENO, "\x1b[?1000l", 8);
       write(STDOUT_FILENO, "\x1b[2J", 4);
       write(STDOUT_FILENO, "\x1b[H", 3);
@@ -1159,7 +1192,15 @@ void editorProcessKeypress() {
       }
       break;
 
-      default:
+    case CTRL_KEY('c'):
+      editorCopyLine();
+      break;
+
+    case CTRL_KEY('v'):
+      editorPasteLine();
+      break;
+
+    default:
       editorInsertChar(c);
       break;
   }
@@ -1182,6 +1223,8 @@ void initEditor() {
   E.statusmsg[0] = '\0';
   E.statusmsg_time = 0;
   E.syntax = NULL;
+  E.clipboard = NULL;
+  E.clipboard_len = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
   E.screenrows -= 2;
@@ -1196,7 +1239,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find");
+  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find | Ctrl-C = copy | Ctrl-V = paste");
 
   while(1) {
     editorRefreshScreen();
