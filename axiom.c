@@ -33,7 +33,9 @@ enum editorKey {
   HOME_KEY,
   END_KEY,
   PAGE_UP,
-  PAGE_DOWN
+  PAGE_DOWN,
+  MOUSE_SCROLL_UP,
+  MOUSE_SCROLL_DOWN
 };
 
 enum editorHighlight {
@@ -206,7 +208,10 @@ void enableRawMode() {
   raw.c_cc[VMIN] = 0;
   raw.c_cc[VTIME] = 1;
 
+  write(STDOUT_FILENO, "\x1b[?1000l", 8);
+
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
+  write(STDOUT_FILENO, "\x1b[?1000h", 8);
 }
 
 int editorReadKey() {
@@ -243,6 +248,16 @@ int editorReadKey() {
           case 'D': return ARROW_LEFT;
           case 'H': return HOME_KEY;
           case 'F': return END_KEY;
+          case 'M': {
+            char mouse[3];
+            if (read(STDIN_FILENO, &mouse[0], 1) != 1) return '\x1b';
+            if (read(STDIN_FILENO, &mouse[1], 1) != 1) return '\x1b';
+            if (read(STDIN_FILENO, &mouse[2], 1) != 1) return '\x1b';
+            int button = mouse[0] - 32;
+            if (button == 64) return MOUSE_SCROLL_UP;
+            if (button == 65) return MOUSE_SCROLL_DOWN;
+            return '\x1b';
+          }
         }
       }
     } else if (seq[0] == 'O') {
@@ -1100,6 +1115,20 @@ void editorProcessKeypress() {
         int times = E.screenrows;
         while (times--)
           editorMoveCursor(c == PAGE_UP ? ARROW_UP : ARROW_DOWN);
+      }
+      break;
+
+    case MOUSE_SCROLL_UP:
+      {
+        int times = 3;
+        while (times--) editorMoveCursor(ARROW_UP);
+      }
+      break;
+
+    case MOUSE_SCROLL_DOWN:
+      {
+        int times = 3;
+        while (times--) editorMoveCursor(ARROW_DOWN);
       }
       break;
 
