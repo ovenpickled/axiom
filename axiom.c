@@ -86,7 +86,7 @@ struct editorConfig {
   erow *row;
   int dirty;
   char *filename;
-  char statusmsg[80];
+  char statusmsg[120];
   char *clipboard;
   int clipboard_len;
   time_t statusmsg_time;
@@ -219,8 +219,6 @@ void enableRawMode() {
   raw.c_lflag &= ~(ECHO | ICANON | IEXTEN | ISIG);
   raw.c_cc[VMIN] = 0;
   raw.c_cc[VTIME] = 1;
-
-  write(STDOUT_FILENO, "\x1b[?1000l", 8);
 
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr");
   write(STDOUT_FILENO, "\x1b[?1000h", 8);
@@ -945,14 +943,15 @@ void editorDrawRows(struct abuf *ab) {
 }
 
 void editorDrawStatusBar(struct abuf *ab) {
+  int fullwidth = E.screencols + E.linenum_width;
   abAppend(ab, "\x1b[7m", 4);
   char status[80], rstatus[80];
   int len = snprintf(status, sizeof(status), "%.20s - %d lines %s", E.filename ? E.filename : "[No Name]", E.numrows, E.dirty ? "(modified)" : "");
   int rlen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d", E.syntax ? E.syntax -> filetype : "no ft", E.cy + 1, E.numrows);
-  if (len > E.screencols) len = E.screencols;
+  if (len > fullwidth) len = fullwidth;
   abAppend(ab, status, len);
-  while (len < E.screencols) {
-    if (E.screencols - len == rlen) {
+  while (len < fullwidth) {
+    if (fullwidth - len == rlen) {
       abAppend(ab, rstatus, rlen);
       break;
     } else {
@@ -967,7 +966,7 @@ void editorDrawStatusBar(struct abuf *ab) {
 void editorDrawMessageBar(struct abuf *ab) {
   abAppend(ab, "\x1b[K", 3);
   int msglen = strlen(E.statusmsg);
-  if (msglen > E.screencols) msglen = E.screencols;
+  if (msglen > E.screencols + E.linenum_width) msglen = E.screencols + E.linenum_width;
   if (msglen && time(NULL) - E.statusmsg_time < 5)
     abAppend(ab, E.statusmsg, msglen);
 }
