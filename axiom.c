@@ -572,17 +572,17 @@ void editorInsertChar(int c) {
 }
 
 void editorInsertNewLine() {
-  erow *row = &E.row[E.cy];
+  erow *row = (E.cy < E.numrows) ? &E.row[E.cy] : NULL;
 
   int indent = 0;
-  if (E.cy < E.numrows) {
+  if (row) {
     while (indent < row -> size && row -> chars[indent] == ' ')
       indent++;
   }
 
   if (E.cx == 0) {
     editorInsertRow(E.cy, "", 0);
-  } else {
+  } else if (row) {
     editorInsertRow(E.cy + 1, &row -> chars[E.cx], row -> size - E.cx);
     row = &E.row[E.cy];
     row -> size = E.cx;
@@ -1116,13 +1116,13 @@ void editorProcessKeypress() {
 
     case '\t':
       {
-    int spaces = AXIOM_TAB_STOP - (E.cx % AXIOM_TAB_STOP);
-    while (spaces--)
-      editorInsertChar(' ');
+        int spaces = AXIOM_TAB_STOP - (E.cx % AXIOM_TAB_STOP);
+        while (spaces--)
+          editorInsertChar(' ');
       }
       break;
 
-    default:
+      default:
       editorInsertChar(c);
       break;
   }
