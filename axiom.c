@@ -15,6 +15,7 @@
 #include <time.h>
 #include <stdarg.h>
 #include <fcntl.h>
+#include <signal.h>
 
 /*** defines ***/
 #define AXIOM_VERSION "0.0.1"
@@ -184,6 +185,7 @@ void editorUpdateLinenumWidth();
 
 /*** terminal ***/
 void die(const char *s) {
+  write(STDOUT_FILENO, "\x1b[?1000l", 8);
   write(STDOUT_FILENO, "\x1b[2J", 4);
   write(STDOUT_FILENO, "\x1b[H", 3);
 
@@ -194,6 +196,12 @@ void die(const char *s) {
 void disableRawMode() {
   if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.orig_termios) == -1)
     die("tcsetattr");
+}
+
+void handleSignal(int sig) {
+  (void)sig;
+  write(STDOUT_FILENO, "\x1b[?1000l", 8);
+  exit(0);
 }
 
 void enableRawMode() {
@@ -678,7 +686,6 @@ void editorOpen(char *filename) {
   free(line);
   fclose(fp);
   E.dirty = 0;
-  editorUpdateLinenumWidth();
 }
 
 void editorSave() {
@@ -1055,6 +1062,7 @@ void editorProcessKeypress() {
         quit_times--;
         return;
       }
+      write(STDOUT_FILENO, "\x1b[?1000l", 8);
       write(STDOUT_FILENO, "\x1b[2J", 4);
       write(STDOUT_FILENO, "\x1b[H", 3);
       exit(0);
@@ -1160,6 +1168,8 @@ void editorProcessKeypress() {
 
 /*** init ***/
 void initEditor() {
+  signal(SIGTERM, handleSignal);
+  signal(SIGHUP, handleSignal);
   E.cx = 0;
   E.cy = 0;
   E.rx = 0;
