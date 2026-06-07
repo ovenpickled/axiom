@@ -21,6 +21,7 @@
 #define AXIOM_VERSION "0.0.1"
 #define AXIOM_TAB_STOP 8
 #define AXIOM_QUIT_TIMES 3
+#define AXIOM_SCROLL_SPEED 3
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -83,6 +84,10 @@ struct editorConfig {
   int screencols;
   int numrows;
   int linenum_width;
+  int tab_stop;
+  int scroll_speed;
+  int quit_times;
+  int quit_times_reset;
   erow *row;
   int dirty;
   char *filename;
@@ -186,6 +191,7 @@ char *editorPrompt(char *prompt, void (*callback)(char *, int));
 void editorUpdateLinenumWidth();
 void editorCopyLine();
 void editorPasteLine();
+void loadConfig();
 
 /*** terminal ***/
 void die(const char *s) {
@@ -476,7 +482,7 @@ int editorRowCxToRx(erow *row, int cx) {
   int j;
   for (j = 0; j < cx; j++) {
     if (row -> chars[j] == '\t')
-      rx += (AXIOM_TAB_STOP - 1) - (rx % AXIOM_TAB_STOP);
+      rx += (E.tab_stop - 1) - (rx % E.tab_stop);
     rx++;
   }
   return rx;
@@ -487,7 +493,7 @@ int editorRowRxToCx(erow *row, int rx) {
   int cx;
   for (cx = 0; cx < row -> size; cx++) {
     if (row -> chars[cx] == '\t')
-      cur_rx += (AXIOM_TAB_STOP - 1) - (cur_rx % AXIOM_TAB_STOP);
+      cur_rx += (E.tab_stop - 1) - (cur_rx % E.tab_stop);
     cur_rx++;
 
     if (cur_rx > rx) return cx;
@@ -502,13 +508,13 @@ void editorUpdateRow(erow *row) {
     if (row -> chars[j] == '\t') tabs++;
 
   free(row -> render);
-  row -> render = malloc(row -> size + tabs * (AXIOM_TAB_STOP - 1) + 1);
+  row -> render = malloc(row -> size + tabs * (E.tab_stop - 1) + 1);
 
   int idx = 0;
   for (j = 0; j < row -> size; j++) {
     if (row -> chars[j] == '\t') {
       row -> render[idx++] = ' ';
-      while (idx % AXIOM_TAB_STOP != 0) row -> render[idx++] = ' ';
+      while (idx % E.tab_stop != 0) row -> render[idx++] = ' ';
     }else {
       row -> render[idx++] = row -> chars[j];
     }
@@ -1078,7 +1084,6 @@ void editorMoveCursor(int key) {
 }
 
 void editorProcessKeypress() {
-  static int quit_times = AXIOM_QUIT_TIMES;
   int c = editorReadKey();
 
   switch (c) {
@@ -1087,10 +1092,10 @@ void editorProcessKeypress() {
       break;
 
     case CTRL_KEY('q'):
-      if (E.dirty && quit_times > 0) {
+      if (E.dirty && E.quit_times > 0) {
         editorSetStatusMessage("WARNING!!! File has unsaved changes. "
-                               "Press Ctrl-Q %d more times to quit.", quit_times);
-        quit_times--;
+                               "Press Ctrl-Q %d more times to quit.", E.quit_times);
+        E.quit_times--;
         return;
       }
       free(E.clipboard);
@@ -1126,8 +1131,8 @@ void editorProcessKeypress() {
       } else {
         if (E.cx > 0 && E.cy < E.numrows) {
           erow *row = &E.row[E.cy];
-          int spaces = E.cx % AXIOM_TAB_STOP;
-          if (spaces == 0) spaces = AXIOM_TAB_STOP;
+          int spaces = E.cx % E.tab_stop;
+          if (spaces == 0) spaces = E.tab_stop;
           int can_delete = 1;
           for (int i = E.cx - spaces; i < E.cx; i++) {
             if (row->chars[i] != ' ') { can_delete = 0; break; }
@@ -1160,17 +1165,17 @@ void editorProcessKeypress() {
 
     case MOUSE_SCROLL_UP:
       {
-        int times = 3;
+        int times = E.scroll_speed;
         while (times--) editorMoveCursor(ARROW_UP);
       }
-      break;
+      return;
 
     case MOUSE_SCROLL_DOWN:
       {
-        int times = 3;
+        int times = E.scroll_speed;
         while (times--) editorMoveCursor(ARROW_DOWN);
       }
-      break;
+      return;
 
     case ARROW_UP:
     case ARROW_DOWN:
@@ -1181,11 +1186,11 @@ void editorProcessKeypress() {
 
     case CTRL_KEY('l'):
     case '\x1b':
-      break;
+      return;
 
     case '\t':
       {
-        int spaces = AXIOM_TAB_STOP - (E.cx % AXIOM_TAB_STOP);
+        int spaces = E.tab_stop - (E.cx % E.tab_stop);
         while (spaces--)
           editorInsertChar(' ');
       }
@@ -1203,7 +1208,43 @@ void editorProcessKeypress() {
       editorInsertChar(c);
       break;
   }
-  quit_times = AXIOM_QUIT_TIMES;
+  E.quit_times = E.quit_times_reset;
+}
+
+/*** config ***/
+void loadConfig() {
+  char *home = getenv("HOME");
+  if (!home) return;
+
+  char path[256];
+  snprintf(path, sizeof(path), "%s/.axiomrc", home);
+
+  FILE *fp = fopen(path, "r");
+  if (!fp) return;
+
+  char line[256];
+  while (fgets(line, sizeof(line), fp)) {
+    int len = strlen(line);
+    if (len > 0 && line[len - 1] == '\n') line[len - 1] = '\0';
+
+    if (line[0] == '#' || line[0] == '\0') continue;
+
+    char key[64], value[64];
+    if (sscanf(line, "%63s = %63s", key, value) != 2) continue;
+
+    int val = atoi(value);
+    if (val <= 0) continue;
+
+    if (strcmp(key, "tab_stop") == 0) {
+      E.tab_stop = val;
+    } else if (strcmp(key, "quit_times") == 0) {
+      E.quit_times = val;
+      E.quit_times_reset = val;
+    } else if (strcmp(key, "scroll_speed") == 0) {
+      E.scroll_speed = val;
+    }
+  }
+  fclose(fp);
 }
 
 /*** init ***/
@@ -1224,11 +1265,17 @@ void initEditor() {
   E.syntax = NULL;
   E.clipboard = NULL;
   E.clipboard_len = 0;
+  E.tab_stop = AXIOM_TAB_STOP;
+  E.quit_times = AXIOM_QUIT_TIMES;
+  E.scroll_speed = AXIOM_SCROLL_SPEED;
+  E.quit_times = AXIOM_QUIT_TIMES;
+  E.quit_times_reset = AXIOM_QUIT_TIMES;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
   E.screenrows -= 2;
   E.linenum_width = 0;
   editorUpdateLinenumWidth();
+  loadConfig();
 }
 
 int main(int argc, char *argv[]) {
