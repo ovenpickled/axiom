@@ -22,6 +22,7 @@
 #define AXIOM_TAB_STOP 8
 #define AXIOM_QUIT_TIMES 3
 #define AXIOM_SCROLL_SPEED 3
+#define MAX_BUFFERS 10
 
 #define CTRL_KEY(k) ((k) & 0x1f)
 
@@ -37,7 +38,9 @@ enum editorKey {
   PAGE_UP,
   PAGE_DOWN,
   MOUSE_SCROLL_UP,
-  MOUSE_SCROLL_DOWN
+  MOUSE_SCROLL_DOWN,
+  CTRL_ARROW_LEFT,
+  CTRL_ARROW_RIGHT
 };
 
 enum editorHighlight {
@@ -76,6 +79,17 @@ typedef struct erow {
   int hl_open_comment;
 } erow;
 
+typedef struct {
+  int cx, cy, rx;
+  int rowoff, coloff;
+  int numrows;
+  int linenum_width;
+  erow *row;
+  int dirty;
+  char *filename;
+  struct editorSyntax *syntax;
+} editorBuffer;
+
 struct editorConfig {
   int cx, cy;
   int rx;
@@ -83,6 +97,7 @@ struct editorConfig {
   int coloff;
   int screenrows;
   int screencols;
+  int base_screencols;
   int numrows;
   int linenum_width;
   int tab_stop;
@@ -92,6 +107,16 @@ struct editorConfig {
   int sel_active;
   int sel_anchor_x;
   int sel_anchor_y;
+
+  editorBuffer bufs[MAX_BUFFERS];
+  int cur_buf;
+  int num_bufs;
+
+  int key_new_buffer;
+  int key_close_buffer;
+  int key_next_buffer;
+  int key_prev_buffer;
+
   erow *row;
   int dirty;
   char *filename;
@@ -188,6 +213,14 @@ struct editorSyntax HLDB[] = {
 
 #define HLDB_ENTRIES (sizeof(HLDB) / sizeof(HLDB[0]))
 
+/*** append buffer ***/
+struct abuf {
+  char *b;
+  int len;
+};
+
+#define ABUF_INIT {NULL, 0}
+
 /*** prototypes ***/
 void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen();
@@ -196,6 +229,13 @@ void editorUpdateLinenumWidth();
 void editorCopy();
 void editorPaste();
 void loadConfig();
+void editorSaveCurrentBuffer();
+void editorLoadBuffer(int idx);
+void editorSwitchBuffer(int idx);
+void editorNewBuffer();
+void editorCloseBuffer();
+int parseKey(const char *keystr);
+void editorDrawTabBar(struct abuf *ab);
 
 /*** terminal ***/
 void die(const char *s) {
@@ -258,6 +298,16 @@ int editorReadKey() {
             case '6': return PAGE_DOWN;
             case '7': return HOME_KEY;
             case '8': return END_KEY;
+          }
+        } else if (seq[2] == ';') {
+          char mod, key;
+          if (read(STDIN_FILENO, &mod, 1) != 1) return '\x1b';
+          if (read(STDIN_FILENO, &key, 1) != 1) return '\x1b';
+          if (mod == '5') {
+            switch (key) {
+              case 'C': return CTRL_ARROW_RIGHT;
+              case 'D': return CTRL_ARROW_LEFT;
+            }
           }
         }
       } else {
@@ -742,6 +792,84 @@ void editorPaste() {
   editorSetStatusMessage("Pasted");
 }
 
+/*** buffers ***/
+void editorSaveCurrentBuffer() {
+  editorBuffer *b = &E.bufs[E.cur_buf];
+  b->cx = E.cx; b->cy = E.cy; b->rx = E.rx;
+  b->rowoff = E.rowoff; b->coloff = E.coloff;
+  b->numrows = E.numrows; b->row = E.row;
+  b->dirty = E.dirty; b->filename = E.filename;
+  b->syntax = E.syntax; b->linenum_width = E.linenum_width;
+}
+
+void editorLoadBuffer(int idx) {
+  editorBuffer *b = &E.bufs[idx];
+  E.cx = b->cx; E.cy = b->cy; E.rx = b->rx;
+  E.rowoff = b->rowoff; E.coloff = b->coloff;
+  E.numrows = b->numrows; E.row = b->row;
+  E.dirty = b->dirty; E.filename = b->filename;
+  E.syntax = b->syntax; E.linenum_width = b->linenum_width;
+  E.screencols = E.base_screencols - E.linenum_width;
+}
+
+void editorSwitchBuffer(int idx) {
+  if (idx < 0 || idx >= E.num_bufs) return;
+  editorSaveCurrentBuffer();
+  E.cur_buf = idx;
+  editorLoadBuffer(idx);
+  editorSetStatusMessage("Buffer %d/%d: %s", E.cur_buf + 1, E.num_bufs,
+    E.filename ? E.filename : "[No Name]");
+}
+
+void editorNewBuffer() {
+  if (E.num_bufs >= MAX_BUFFERS) {
+    editorSetStatusMessage("Maximum buffers reached (%d)", MAX_BUFFERS);
+    return;
+  }
+  editorSaveCurrentBuffer();
+  int idx = E.num_bufs++;
+  editorBuffer *b = &E.bufs[idx];
+  b->cx = 0; b->cy = 0; b->rx = 0;
+  b->rowoff = 0; b->coloff = 0;
+  b->numrows = 0; b->row = NULL;
+  b->dirty = 0;
+  b->filename = NULL;
+  b->syntax = NULL;
+  b->linenum_width = 3;
+  E.cur_buf = idx;
+  editorLoadBuffer(idx);
+  E.dirty = 0;
+  editorSetStatusMessage("New buffer %d/%d", E.cur_buf + 1, E.num_bufs);
+}
+
+void editorCloseBuffer() {
+  if (E.num_bufs == 1) {
+    editorSetStatusMessage("Can't close last buffer -- use Ctrl-Q to quit");
+    return;
+  }
+  int effectively_empty = (E.numrows == 0 ||
+                          (E.numrows == 1 && E.row[0].size == 0));
+
+  if (E.dirty && !effectively_empty) {
+    editorSetStatusMessage("Buffer has unsaved changes -- save first with Ctrl-S");
+    return;
+  }
+
+  for (int i = 0; i < E.numrows; i++)
+    editorFreeRow(&E.row[i]);
+  free(E.row);
+  free(E.filename);
+
+  for (int i = E.cur_buf; i < E.num_bufs - 1; i++)
+    E.bufs[i] = E.bufs[i + 1];
+  E.num_bufs--;
+
+  if (E.cur_buf >= E.num_bufs) E.cur_buf = E.num_bufs - 1;
+  editorLoadBuffer(E.cur_buf);
+  editorSetStatusMessage("Buffer closed -- now on buffer %d/%d: %s",
+    E.cur_buf + 1, E.num_bufs, E.filename ? E.filename : "[No Name]");
+}
+
 /*** file i/o ***/
 char *editorRowsToString(int *buflen) {
   int totlen = 0;
@@ -782,6 +910,7 @@ void editorOpen(char *filename) {
   free(line);
   fclose(fp);
   E.dirty = 0;
+  editorSaveCurrentBuffer();
 }
 
 void editorSave() {
@@ -883,14 +1012,6 @@ void editorFind() {
   }
 }
 
-/*** append buffer ***/
-struct abuf {
-  char *b;
-  int len;
-};
-
-#define ABUF_INIT {NULL, 0}
-
 void abAppend(struct abuf *ab, const char *s, int len) {
   char *new = realloc(ab -> b, ab -> len + len);
 
@@ -926,15 +1047,12 @@ void editorScroll() {
 }
 
 void editorUpdateLinenumWidth() {
-  int old_width = E.linenum_width;
-
   int digits = 0;
   int n = (E.numrows > 0) ? E.numrows : 1;
   while (n) { digits++; n /= 10; }
   E.linenum_width = digits + 2;
+  E.screencols = E.base_screencols - E.linenum_width;
 
-  E.screencols += old_width;
-  E.screencols -= E.linenum_width;
 }
 
 int editorPosInSelection(int row, int col) {
@@ -953,6 +1071,54 @@ int editorPosInSelection(int row, int col) {
   if (row < E.numrows && col >= E.row[row].size) return 0;
 
   return 1;
+}
+
+void editorDrawTabBar(struct abuf *ab) {
+  editorSaveCurrentBuffer();
+  abAppend(ab, "\x1b[0m", 4);
+
+  int fullwidth = E.screencols + E.linenum_width;
+  int written = 0;
+
+  for (int i = 0; i < E.num_bufs; i++) {
+    char tab[32];
+    const char *name = E.bufs[i].filename ? E.bufs[i].filename : "[No Name]";
+    const char *slash = strrchr(name, '/');
+    if (slash) name = slash + 1;
+
+    int is_current = (i == E.cur_buf);
+
+    int effectively_empty = (E.bufs[i].numrows == 0 ||
+                            (E.bufs[i].numrows == 1 &&
+                             E.bufs[i].row != NULL &&
+                             E.bufs[i].row[0].size == 0));
+    int is_dirty = E.bufs[i].dirty && !effectively_empty;
+
+    int tablen;
+    if (is_current) {
+      abAppend(ab, "\x1b[0m", 4);
+      abAppend(ab, "\x1b[7m", 4);
+      tablen = snprintf(tab, sizeof(tab), " [%d] %s%s ",
+                        i + 1, name, is_dirty ? " \xe2\x97\x8f" : "");
+    } else {
+      abAppend(ab, "\x1b[0m", 4);
+      abAppend(ab, "\x1b[2m", 4);
+      tablen = snprintf(tab, sizeof(tab), " [%d] %s%s ",
+                        i + 1, name, is_dirty ? " \xe2\x97\x8f" : "");
+    }
+
+    if (written + tablen > fullwidth) break;
+    abAppend(ab, tab, tablen);
+    written += tablen;
+  }
+
+  abAppend(ab, "\x1b[0m", 4);
+  while (written < fullwidth) {
+    abAppend(ab, " ", 1);
+    written++;
+  }
+  abAppend(ab, "\x1b[0m", 4);
+  abAppend(ab, "\r\n", 2);
 }
 
 void editorDrawRows(struct abuf *ab) {
@@ -1038,7 +1204,10 @@ void editorDrawStatusBar(struct abuf *ab) {
   int fullwidth = E.screencols + E.linenum_width;
   abAppend(ab, "\x1b[7m", 4);
   char status[80], rstatus[80];
-  int len = snprintf(status, sizeof(status), "%.20s - %d lines %s", E.filename ? E.filename : "[No Name]", E.numrows, E.dirty ? "(modified)" : "");
+  int len = snprintf(status, sizeof(status), "[%d/%d] %.20s - %d lines %s",
+  E.cur_buf + 1, E.num_bufs,
+  E.filename ? E.filename : "[No Name]",
+  E.numrows, E.dirty ? "(modified)" : "");
   int rlen = snprintf(rstatus, sizeof(rstatus), "%s | %d/%d", E.syntax ? E.syntax -> filetype : "no ft", E.cy + 1, E.numrows);
   if (len > fullwidth) len = fullwidth;
   abAppend(ab, status, len);
@@ -1071,12 +1240,13 @@ void editorRefreshScreen() {
   abAppend(&ab, "\x1b[?25l", 6);
   abAppend(&ab, "\x1b[H", 3);
 
+  editorDrawTabBar(&ab);
   editorDrawRows(&ab);
   editorDrawStatusBar(&ab);
   editorDrawMessageBar(&ab);
 
   char buf[32];
-  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1, (E.rx - E.coloff) + 1 + E.linenum_width);
+  snprintf(buf, sizeof(buf), "\x1b[%d;%dH", (E.cy - E.rowoff) + 1 + 1, (E.rx - E.coloff) + 1 + E.linenum_width);
   abAppend(&ab, buf, strlen(buf));
 
   abAppend(&ab, "\x1b[?25h", 6);
@@ -1172,23 +1342,49 @@ void editorMoveCursor(int key) {
 void editorProcessKeypress() {
   int c = editorReadKey();
 
+  if (c == E.key_new_buffer) {
+    editorNewBuffer();
+    return;
+  }
+  if (c == E.key_close_buffer) {
+    editorCloseBuffer();
+    return;
+  }
+  if (c == E.key_next_buffer) {
+    editorSwitchBuffer((E.cur_buf + 1) % E.num_bufs);
+    return;
+  }
+  if (c == E.key_prev_buffer) {
+    editorSwitchBuffer((E.cur_buf - 1 + E.num_bufs) % E.num_bufs);
+    return;
+  }
+
   switch (c) {
     case '\r':
       editorInsertNewLine();
       break;
 
     case CTRL_KEY('q'):
-      if (E.dirty && E.quit_times > 0) {
-        editorSetStatusMessage("WARNING!!! File has unsaved changes. "
-                               "Press Ctrl-Q %d more times to quit.", E.quit_times);
-        E.quit_times--;
-        return;
+      {
+        editorSaveCurrentBuffer();
+
+        int any_dirty = 0;
+        for (int i = 0; i < E.num_bufs; i++) {
+          if (E.bufs[i].dirty) { any_dirty = 1; break; }
+        }
+
+        if (any_dirty && E.quit_times > 0) {
+          editorSetStatusMessage("WARNING!!! Unsaved changes in one or more buffers. "
+                                 "Press Ctrl-Q %d more times to quit.", E.quit_times);
+          E.quit_times--;
+          return;
+        }
+        free(E.clipboard);
+        write(STDOUT_FILENO, "\x1b[?1000l", 8);
+        write(STDOUT_FILENO, "\x1b[2J", 4);
+        write(STDOUT_FILENO, "\x1b[H", 3);
+        exit(0);
       }
-      free(E.clipboard);
-      write(STDOUT_FILENO, "\x1b[?1000l", 8);
-      write(STDOUT_FILENO, "\x1b[2J", 4);
-      write(STDOUT_FILENO, "\x1b[H", 3);
-      exit(0);
       break;
 
     case CTRL_KEY('s'):
@@ -1311,6 +1507,17 @@ void editorProcessKeypress() {
 }
 
 /*** config ***/
+int parseKey(const char *keystr) {
+  if (strncmp(keystr, "ctrl-", 5) == 0) {
+    const char *rest = keystr + 5;
+    if (strlen(rest) == 1 && rest[0] >= 'a' && rest[0] <= 'z')
+      return CTRL_KEY(rest[0]);
+    if (strcmp(rest, "right") == 0) return CTRL_ARROW_RIGHT;
+    if (strcmp(rest, "left") == 0) return CTRL_ARROW_LEFT;
+  }
+  return -1;
+}
+
 void loadConfig() {
   char *home = getenv("HOME");
   if (!home) return;
@@ -1341,6 +1548,18 @@ void loadConfig() {
       E.quit_times_reset = val;
     } else if (strcmp(key, "scroll_speed") == 0) {
       E.scroll_speed = val;
+    } else if (strcmp(key, "key_new_buffer") == 0) {
+      int k = parseKey(value);
+      if (k != -1) E.key_new_buffer = k;
+    } else if (strcmp(key, "key_close_buffer") == 0) {
+      int k = parseKey(value);
+      if (k != -1) E.key_close_buffer = k;
+    } else if (strcmp(key, "key_next_buffer") == 0) {
+      int k = parseKey(value);
+      if (k != -1) E.key_next_buffer = k;
+    } else if (strcmp(key, "key_prev_buffer") == 0) {
+      int k = parseKey(value);
+      if (k != -1) E.key_prev_buffer = k;
     }
   }
   fclose(fp);
@@ -1366,15 +1585,24 @@ void initEditor() {
   E.clipboard_len = 0;
   E.tab_stop = AXIOM_TAB_STOP;
   E.quit_times = AXIOM_QUIT_TIMES;
-  E.scroll_speed = AXIOM_SCROLL_SPEED;
   E.quit_times_reset = AXIOM_QUIT_TIMES;
+  E.scroll_speed = AXIOM_SCROLL_SPEED;
   E.sel_active = 0;
   E.sel_anchor_x = 0;
   E.sel_anchor_y = 0;
-
-  if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
-  E.screenrows -= 2;
+  E.cur_buf = 0;
+  E.num_bufs = 1;
+  memset(E.bufs, 0, sizeof(E.bufs));
+  E.key_new_buffer = CTRL_KEY('t');
+  E.key_close_buffer = CTRL_KEY('w');
+  E.key_next_buffer = CTRL_ARROW_RIGHT;
+  E.key_prev_buffer = CTRL_ARROW_LEFT;
+  E.base_screencols = 0;
   E.linenum_width = 0;
+
+  if (getWindowSize(&E.screenrows, &E.base_screencols) == -1) die("getWindowSize");
+  E.screenrows -= 3;
+  E.screencols = E.base_screencols;
   editorUpdateLinenumWidth();
   loadConfig();
 }
@@ -1386,7 +1614,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find | Ctrl-K = select | Ctrl-C = copy | Ctrl-V = paste");
+  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find | Ctrl-K = select | Ctrl-C = copy | Ctrl-V = paste | Ctrl-T = new buffer | Ctrl-W = close buffer");
 
   while(1) {
     editorRefreshScreen();
