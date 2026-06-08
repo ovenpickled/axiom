@@ -1,0 +1,33 @@
+# .axiomrc.example
+# Copy this file to ~/.axiomrc and uncomment the options you want to change
+# Axiom will use built-in defaults for anything not specified
+
+# -------------------------
+# Editor behaviour
+# -------------------------
+
+# Number of spaces per tab stop (default: 8)
+# tab_stop = 4
+
+# Number of Ctrl-Q presses needed to quit with unsaved changes (default: 3)
+# quit_times = 2
+
+# Number of lines scrolled per mouse wheel tick (default: 3)
+# scroll_speed = 5
+
+# -------------------------
+# Buffer keybindings
+# Supported: ctrl-a through ctrl-z, ctrl-left, ctrl-right
+# -------------------------
+
+# Open a new empty buffer (default: ctrl-t)
+# key_new_buffer = ctrl-t
+
+# Close the current buffer (default: ctrl-w)
+# key_close_buffer = ctrl-w
+
+# Switch to the next buffer (default: ctrl-right)
+# key_next_buffer = ctrl-right
+
+# Switch to the previous buffer (default: ctrl-left)
+# key_prev_buffer = ctrl-left
