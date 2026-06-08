@@ -726,7 +726,8 @@ void editorPaste() {
       }
       first = 0;
     } else {
-      editorInsertNewLine();
+      editorInsertRow(E.cy + 1, "", 0);
+      E.cy++;
       E.cx = 0;
       for (int i = 0; i < chunk_len; i++) {
         editorInsertChar(p[i]);
@@ -1366,7 +1367,6 @@ void initEditor() {
   E.tab_stop = AXIOM_TAB_STOP;
   E.quit_times = AXIOM_QUIT_TIMES;
   E.scroll_speed = AXIOM_SCROLL_SPEED;
-  E.quit_times = AXIOM_QUIT_TIMES;
   E.quit_times_reset = AXIOM_QUIT_TIMES;
   E.sel_active = 0;
   E.sel_anchor_x = 0;
