@@ -48,7 +48,8 @@ enum editorHighlight {
   HL_COMMENT,
   HL_MLCOMMENT,
   HL_KEYWORD1,
-  HL_KEYWORD2
+  HL_KEYWORD2,
+  HL_SELECTION
 };
 
 #define HL_HIGHLIGHT_NUMBERS (1<<0)
@@ -88,6 +89,9 @@ struct editorConfig {
   int scroll_speed;
   int quit_times;
   int quit_times_reset;
+  int sel_active;
+  int sel_anchor_x;
+  int sel_anchor_y;
   erow *row;
   int dirty;
   char *filename;
@@ -189,8 +193,8 @@ void editorSetStatusMessage(const char *fmt, ...);
 void editorRefreshScreen();
 char *editorPrompt(char *prompt, void (*callback)(char *, int));
 void editorUpdateLinenumWidth();
-void editorCopyLine();
-void editorPasteLine();
+void editorCopy();
+void editorPaste();
 void loadConfig();
 
 /*** terminal ***/
@@ -440,6 +444,7 @@ void editorUpdateSyntax(erow *row) {
 
 int editorSyntaxToColour(int hl) {
   switch (hl) {
+    case HL_SELECTION: return 7;
     case HL_COMMENT:
     case HL_MLCOMMENT: return 36;
     case HL_KEYWORD1: return 33;
@@ -654,32 +659,86 @@ void editorDelChar() {
   }
 }
 
-void editorCopyLine() {
-  if (E.cy >= E.numrows) return;
-  erow *row = &E.row[E.cy];
+void editorCopy() {
+  if (!E.sel_active) {
+    if (E.cy >= E.numrows) return;
+    erow *row = &E.row[E.cy];
+    free(E.clipboard);
+    E.clipboard = malloc(row->size + 1);
+    memcpy(E.clipboard, row->chars, row->size);
+    E.clipboard[row->size] = '\0';
+    E.clipboard_len = row->size;
+    editorSetStatusMessage("Line copied");
+    return;
+  }
+
+  int start_y = E.sel_anchor_y;
+  int end_y = E.cy;
+
+  if (start_y > end_y) {
+    int tmp = start_y;
+    start_y = end_y;
+    end_y = tmp;
+  }
+
+  int total = 0;
+  for (int y = start_y; y <= end_y; y++) {
+    if (y >= E.numrows) break;
+    total += E.row[y].size;
+    if (y < end_y) total++;
+  }
+
   free(E.clipboard);
-  E.clipboard = malloc(row->size + 1);
-  memcpy(E.clipboard, row->chars, row->size);
-  E.clipboard[row->size] = '\0';
-  E.clipboard_len = row->size;
-  editorSetStatusMessage("Line copied");
+  E.clipboard = malloc(total + 1);
+  E.clipboard_len = total;
+
+  int pos = 0;
+  for (int y = start_y; y <= end_y; y++) {
+    if (y >= E.numrows) break;
+    erow *row = &E.row[y];
+    memcpy(&E.clipboard[pos], row->chars, row->size);
+    pos += row->size;
+    if (y < end_y) E.clipboard[pos++] = '\n';
+  }
+  E.clipboard[pos] = '\0';
+
+  E.sel_active = 0;
+  editorSetStatusMessage("Copied %d chars", total);
 }
 
-void editorPasteLine() {
+void editorPaste() {
   if (E.clipboard == NULL) {
     editorSetStatusMessage("Nothing to paste");
     return;
   }
-  if (E.numrows == 0) {
-    editorInsertRow(0, E.clipboard, E.clipboard_len);
-    E.cy = 0;
-  } else {
-    editorInsertRow(E.cy + 1, E.clipboard, E.clipboard_len);
-    E.cy++;
+
+  char *p = E.clipboard;
+  char *end = E.clipboard + E.clipboard_len;
+  int first = 1;
+
+  while (p <= end) {
+    char *nl = memchr(p, '\n', end - p);
+    int chunk_len = nl ? (nl - p) : (end - p);
+
+    if (first) {
+      for (int i = 0; i < chunk_len; i++) {
+        editorInsertChar(p[i]);
+      }
+      first = 0;
+    } else {
+      editorInsertNewLine();
+      E.cx = 0;
+      for (int i = 0; i < chunk_len; i++) {
+        editorInsertChar(p[i]);
+      }
+    }
+
+    if (!nl) break;
+    p = nl + 1;
   }
+
   E.coloff = 0;
-  E.cx = E.row[E.cy].size;
-  editorSetStatusMessage("Line pasted");
+  editorSetStatusMessage("Pasted");
 }
 
 /*** file i/o ***/
@@ -877,6 +936,24 @@ void editorUpdateLinenumWidth() {
   E.screencols -= E.linenum_width;
 }
 
+int editorPosInSelection(int row, int col) {
+  if (!E.sel_active) return 0;
+
+  int start_y = E.sel_anchor_y;
+  int end_y = E.cy;
+
+  if (start_y > end_y) {
+    int tmp = start_y;
+    start_y = end_y;
+    end_y = tmp;
+  }
+
+  if (row < start_y || row > end_y) return 0;
+  if (row < E.numrows && col >= E.row[row].size) return 0;
+
+  return 1;
+}
+
 void editorDrawRows(struct abuf *ab) {
   int y;
   for (y = 0; y < E.screenrows; y++) {
@@ -913,6 +990,9 @@ void editorDrawRows(struct abuf *ab) {
       int current_colour = -1;
       int j;
       for (j = 0; j < len; j++) {
+        int actual_col = j + E.coloff;
+        int in_sel = editorPosInSelection(filerow, actual_col);
+
         if (iscntrl(c[j])) {
           char sym = (c[j] <= 26) ? '@' + c[j] : '?';
           abAppend(ab, "\x1b[7m", 4);
@@ -923,6 +1003,11 @@ void editorDrawRows(struct abuf *ab) {
             int clen = snprintf(buf, sizeof(buf), "\x1b[%dm", current_colour);
             abAppend(ab, buf, clen);
           }
+        } else if (in_sel) {
+          abAppend(ab, "\x1b[7m", 4);
+          abAppend(ab, &c[j], 1);
+          abAppend(ab, "\x1b[m", 3);
+          current_colour = -1;
         } else if (hl[j] == HL_NORMAL) {
           if (current_colour != -1) {
             abAppend(ab, "\x1b[39m", 5);
@@ -1184,8 +1269,21 @@ void editorProcessKeypress() {
       editorMoveCursor(c);
       break;
 
-    case CTRL_KEY('l'):
+    case CTRL_KEY('k'):
+      if (E.sel_active) {
+        E.sel_active = 0;
+        editorSetStatusMessage("Selection cancelled");
+      } else {
+        E.sel_active = 1;
+        E.sel_anchor_x = 0;
+        E.sel_anchor_y = E.cy;
+        editorSetStatusMessage("Selection started -- move cursor to select");
+      }
+      return;
+
     case '\x1b':
+    case CTRL_KEY('l'):
+      E.sel_active = 0;
       return;
 
     case '\t':
@@ -1197,11 +1295,11 @@ void editorProcessKeypress() {
       break;
 
     case CTRL_KEY('c'):
-      editorCopyLine();
+      editorCopy();
       break;
 
     case CTRL_KEY('v'):
-      editorPasteLine();
+      editorPaste();
       break;
 
     default:
@@ -1270,6 +1368,9 @@ void initEditor() {
   E.scroll_speed = AXIOM_SCROLL_SPEED;
   E.quit_times = AXIOM_QUIT_TIMES;
   E.quit_times_reset = AXIOM_QUIT_TIMES;
+  E.sel_active = 0;
+  E.sel_anchor_x = 0;
+  E.sel_anchor_y = 0;
 
   if (getWindowSize(&E.screenrows, &E.screencols) == -1) die("getWindowSize");
   E.screenrows -= 2;
@@ -1285,7 +1386,7 @@ int main(int argc, char *argv[]) {
     editorOpen(argv[1]);
   }
 
-  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find | Ctrl-C = copy | Ctrl-V = paste");
+  editorSetStatusMessage("HELP: Ctrl-S = save | Ctrl-Q = quit | Ctrl-F = find | Ctrl-K = select | Ctrl-C = copy | Ctrl-V = paste");
 
   while(1) {
     editorRefreshScreen();
