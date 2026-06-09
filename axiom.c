@@ -863,6 +863,7 @@ void editorCloseBuffer() {
   for (int i = E.cur_buf; i < E.num_bufs - 1; i++)
     E.bufs[i] = E.bufs[i + 1];
   E.num_bufs--;
+  memset(&E.bufs[E.num_bufs], 0, sizeof(editorBuffer));
 
   if (E.cur_buf >= E.num_bufs) E.cur_buf = E.num_bufs - 1;
   editorLoadBuffer(E.cur_buf);
@@ -933,6 +934,7 @@ void editorSave() {
         close(fd);
         free(buf);
         E.dirty = 0;
+        editorSaveCurrentBuffer();
         editorSetStatusMessage("%d bytes written to disk", len);
         return;
       }
@@ -1081,10 +1083,13 @@ void editorDrawTabBar(struct abuf *ab) {
   int written = 0;
 
   for (int i = 0; i < E.num_bufs; i++) {
-    char tab[32];
+    char tab[64];
     const char *name = E.bufs[i].filename ? E.bufs[i].filename : "[No Name]";
     const char *slash = strrchr(name, '/');
     if (slash) name = slash + 1;
+
+    char shortname[21];
+    snprintf(shortname, sizeof(shortname), "%.20s", name);
 
     int is_current = (i == E.cur_buf);
 
@@ -1099,12 +1104,12 @@ void editorDrawTabBar(struct abuf *ab) {
       abAppend(ab, "\x1b[0m", 4);
       abAppend(ab, "\x1b[7m", 4);
       tablen = snprintf(tab, sizeof(tab), " [%d] %s%s ",
-                        i + 1, name, is_dirty ? " \xe2\x97\x8f" : "");
+                        i + 1, shortname, is_dirty ? " \xe2\x97\x8f" : "");
     } else {
       abAppend(ab, "\x1b[0m", 4);
       abAppend(ab, "\x1b[2m", 4);
       tablen = snprintf(tab, sizeof(tab), " [%d] %s%s ",
-                        i + 1, name, is_dirty ? " \xe2\x97\x8f" : "");
+                        i + 1, shortname, is_dirty ? " \xe2\x97\x8f" : "");
     }
 
     if (written + tablen > fullwidth) break;
@@ -1370,7 +1375,11 @@ void editorProcessKeypress() {
 
         int any_dirty = 0;
         for (int i = 0; i < E.num_bufs; i++) {
-          if (E.bufs[i].dirty) { any_dirty = 1; break; }
+          int empty = (E.bufs[i].numrows == 0 ||
+              (E.bufs[i].numrows == 1 &&
+               E.bufs[i].row != NULL &&
+               E.bufs[i].row[0].size == 0));
+          if (E.bufs[i].dirty && !empty) { any_dirty = 1; break; }
         }
 
         if (any_dirty && E.quit_times > 0) {
@@ -1539,15 +1548,13 @@ void loadConfig() {
     if (sscanf(line, "%63s = %63s", key, value) != 2) continue;
 
     int val = atoi(value);
-    if (val <= 0) continue;
 
     if (strcmp(key, "tab_stop") == 0) {
-      E.tab_stop = val;
+      if (val > 0) E.tab_stop = val;
     } else if (strcmp(key, "quit_times") == 0) {
-      E.quit_times = val;
-      E.quit_times_reset = val;
+      if (val > 0) { E.quit_times = val; E.quit_times_reset = val; }
     } else if (strcmp(key, "scroll_speed") == 0) {
-      E.scroll_speed = val;
+      if (val > 0) E.scroll_speed = val;
     } else if (strcmp(key, "key_new_buffer") == 0) {
       int k = parseKey(value);
       if (k != -1) E.key_new_buffer = k;
