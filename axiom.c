@@ -18,7 +18,10 @@
 #include <signal.h>
 
 /*** defines ***/
-#define AXIOM_VERSION "0.0.1"
+#ifndef AXIOM_VERSION
+#define AXIOM_VERSION "dev"
+#endif
+
 #define AXIOM_TAB_STOP 8
 #define AXIOM_QUIT_TIMES 3
 #define AXIOM_SCROLL_SPEED 3
@@ -1615,6 +1618,11 @@ void initEditor() {
 }
 
 int main(int argc, char *argv[]) {
+  if (argc >= 2 && strcmp(argv[1], "--version") == 0) {
+    printf("axiom %s\n", AXIOM_VERSION);
+    return 0;
+  }
+
   enableRawMode();
   initEditor();
   if (argc >= 2) {
