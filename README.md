@@ -21,12 +21,10 @@ It supports syntax highlighting for C, Python, Go, and Rust; multiple open buffe
 
 ## Screenshots
 
-> Screenshots coming soon.
-
-<!-- Add screenshots:
-![Axiom editing a C file](./screenshots/axiom-c-highlight.png)
-![Axiom with multiple buffers](./screenshots/axiom-buffers.png)
--->
+![Axiom's Welcome Screen](./screenshots/screenshot4.png)
+![Axiom editing a C file](./screenshots/screenshot1.png)
+![Axiom with multiple buffers](./screenshots/screenshot2.png)
+![Axiom with syntax highlighting](./screenshots/screenshot3.png)
 
 ## Installation
 
