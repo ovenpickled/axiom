@@ -1135,19 +1135,50 @@ void editorDrawRows(struct abuf *ab) {
     int filerow = y + E.rowoff;
     if (filerow >= E.numrows) {
       if (E.numrows == 0 && y == E.screenrows / 3) {
-        char welcome[80];
-        int welcomelen = snprintf(welcome, sizeof(welcome),
-                                  "Axiom Editor -- version %s", AXIOM_VERSION);
-        if (welcomelen > E.screencols) welcomelen = E.screencols;
-        int padding = (E.screencols - welcomelen) / 2;
-        if (padding) {
-          abAppend(ab, "~", 1);
-          padding--;
+        const char *banner[] = {
+          " \u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2557  \u2588\u2588\u2557\u2588\u2588\u2551 \u2588\u2588\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2557   \u2588\u2588\u2588\u2557",
+          "\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2557\u255a\u2588\u2588\u2557\u2588\u2588\u2554\u255d\u2588\u2588\u2551\u2588\u2588\u2554\u2550\u2550\u2550\u2588\u2588\u2557\u2588\u2588\u2588\u2588\u2557 \u2588\u2588\u2588\u2588\u2551",
+          "\u2588\u2588\u2588\u2588\u2588\u2588\u2588\u2551 \u255a\u2588\u2588\u2588\u2554\u255d \u2588\u2588\u2551\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2554\u2588\u2588\u2588\u2588\u2554\u2588\u2588\u2551",
+          "\u2588\u2588\u2554\u2550\u2550\u2588\u2588\u2551 \u2588\u2588\u2554\u2588\u2588\u2557 \u2588\u2588\u2551\u2588\u2588\u2551   \u2588\u2588\u2551\u2588\u2588\u2551\u255a\u2588\u2588\u2554\u255d\u2588\u2588\u2551",
+          "\u2588\u2588\u2551  \u2588\u2588\u2551\u2588\u2588\u2554\u255d \u2588\u2588\u2557\u2588\u2588\u2551\u255a\u2588\u2588\u2588\u2588\u2588\u2588\u2554\u255d\u2588\u2588\u2551 \u255a\u2550\u255d \u2588\u2588\u2551",
+          "\u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d  \u255a\u2550\u255d\u255a\u2550\u255d \u255a\u2550\u2550\u2550\u2550\u2550\u255d \u255a\u2550\u255d     \u255a\u2550\u255d",
+          "",
+          "     v" AXIOM_VERSION " -- A minimal terminal text editor     ",
+        };
+        int num_lines = 8;
+        int fullwidth = E.screencols + E.linenum_width;
+
+        for (int b = 0; b < num_lines && (y + b) < E.screenrows; b++) {
+          const char *bline = banner[b];
+          int bytelen = strlen(bline);
+
+          int visuallen = 0;
+          for (int i = 0; i < bytelen; ) {
+            unsigned char ch = (unsigned char)bline[i];
+            if (ch >= 0xe0) { visuallen++; i += 3; }
+            else { visuallen++; i++; }
+          }
+
+          int padding = (fullwidth - visuallen) / 2;
+          if (padding < 0) padding = 0;
+
+          for (int p = 0; p < padding; p++)
+            abAppend(ab, " ", 1);
+
+          if (b < 6)
+            abAppend(ab, "\x1b[35m", 5);
+          else
+            abAppend(ab, "\x1b[90m", 5);
+
+          abAppend(ab, bline, bytelen);
+          abAppend(ab, "\x1b[m", 3);
+
+          if (b < num_lines - 1) {
+            abAppend(ab, "\x1b[K", 3);
+            abAppend(ab, "\r\n", 2);
+          }
         }
-        while (padding--) abAppend(ab, " ", 1);
-        abAppend(ab, welcome, welcomelen);
-      } else {
-        abAppend(ab, "~", 1);
+        y += num_lines - 1;
       }
     } else {
       char linenum[16];
