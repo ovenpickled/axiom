@@ -1,0 +1,171 @@
+.TH AXIOM 1 "2025" "Axiom" "User Commands"
+.
+.SH NAME
+axiom \- a minimal terminal text editor
+.
+.SH SYNOPSIS
+.B axiom
+[\fIfile\fR]
+.br
+.B axiom
+.B \-\-version
+.
+.SH DESCRIPTION
+.B axiom
+is a terminal text editor written in C with no external dependencies.
+It uses raw terminal I/O and VT100 escape sequences for rendering.
+It supports syntax highlighting, multiple buffers, visual selection,
+incremental search, mouse scroll, line numbers, and a configuration
+file for customising behaviour.
+.PP
+If \fIfile\fR is given, it is opened for editing. If no file is given,
+axiom starts with an empty unnamed buffer.
+.
+.SH OPTIONS
+.TP
+.B \-\-version
+Print the version number and exit.
+.
+.SH KEY BINDINGS
+.SS File Operations
+.TP
+.B Ctrl\-S
+Save the current buffer. Prompts for a filename if the buffer is unnamed.
+.TP
+.B Ctrl\-Q
+Quit. If there are unsaved changes in any buffer, requires confirmation
+by pressing Ctrl\-Q multiple times (configurable via \fIquit_times\fR).
+.TP
+.B Ctrl\-F
+Incremental search. Use arrow keys to move between matches.
+Press \fBEscape\fR to cancel.
+.SS Editing
+.TP
+.B Tab
+Insert spaces up to the next tab stop (configurable via \fItab_stop\fR).
+.TP
+.B Backspace
+Delete the character before the cursor. If the cursor is preceded by a
+full tab stop worth of spaces, deletes them all at once.
+.TP
+.B Enter
+Insert a new line, auto-indented to match the current line.
+.SS Selection and Clipboard
+.TP
+.B Ctrl\-K
+Toggle visual line selection mode. Move the cursor to extend the selection.
+Press \fBCtrl\-K\fR or \fBEscape\fR to cancel.
+.TP
+.B Ctrl\-C
+Copy the current selection. If no selection is active, copies the current line.
+.TP
+.B Ctrl\-V
+Paste the clipboard contents at the cursor position.
+.SS Buffer Management
+.TP
+.B Ctrl\-T
+Open a new empty buffer.
+.TP
+.B Ctrl\-W
+Close the current buffer. Blocked if the buffer has unsaved changes.
+.TP
+.B Ctrl\-Right
+Switch to the next buffer.
+.TP
+.B Ctrl\-Left
+Switch to the previous buffer.
+.SS Navigation
+.TP
+.B Arrow keys
+Move the cursor one character or line at a time.
+.TP
+.B Page Up / Page Down
+Scroll one screen at a time.
+.TP
+.B Home / End
+Move to the start or end of the current line.
+.TP
+.B Mouse scroll
+Scroll up or down (speed configurable via \fIscroll_speed\fR).
+.
+.SH CONFIGURATION
+axiom reads
+.I ~/.axiomrc
+on startup. Lines beginning with
+.B #
+are treated as comments. Each option is written as:
+.PP
+.RS
+.I key
+=
+.I value
+.RE
+.PP
+The following options are supported:
+.TP
+.B tab_stop
+Number of spaces per tab stop. Default:
+.BR 8 .
+.TP
+.B quit_times
+Number of Ctrl\-Q presses required to quit with unsaved changes. Default:
+.BR 3 .
+.TP
+.B scroll_speed
+Number of lines scrolled per mouse wheel tick. Default:
+.BR 3 .
+.TP
+.B key_new_buffer
+Key binding to open a new buffer. Default:
+.BR ctrl\-t .
+.TP
+.B key_close_buffer
+Key binding to close the current buffer. Default:
+.BR ctrl\-w .
+.TP
+.B key_next_buffer
+Key binding to switch to the next buffer. Default:
+.BR ctrl\-right .
+.TP
+.B key_prev_buffer
+Key binding to switch to the previous buffer. Default:
+.BR ctrl\-left .
+.PP
+Accepted key formats:
+.BR ctrl\-a " through " ctrl\-z ", " ctrl\-left ", " ctrl\-right .
+.PP
+See
+.I .axiomrc.example
+in the source repository for a fully annotated template.
+.
+.SH FILES
+.TP
+.I ~/.axiomrc
+User configuration file. Read on startup if it exists.
+.TP
+.I /usr/local/bin/axiom
+Default install location.
+.TP
+.I /usr/local/share/man/man1/axiom.1.gz
+This man page.
+.
+.SH SYNTAX HIGHLIGHTING
+axiom detects the file type from the file extension and applies
+syntax highlighting automatically. Supported languages:
+.PP
+.RS
+C and C++ (.c, .h, .cpp, .hpp, .cc),
+Python (.py),
+Go (.go),
+Rust (.rs)
+.RE
+.
+.SH AUTHORS
+Written by ovenpickled.
+.br
+Source: https://github.com/ovenpickled/axiom
+.
+.SH SEE ALSO
+.BR vi (1),
+.BR nano (1),
+.BR vim (1)
