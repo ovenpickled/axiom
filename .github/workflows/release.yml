@@ -72,9 +72,39 @@ jobs:
           name: axiom-${{ matrix.target }}
           path: axiom-${{ matrix.target }}
 
+  test:
+    name: Smoke test ${{ matrix.target }}
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: linux-x86_64
+
+          - os: macos-latest
+            target: macos-aarch64
+
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: axiom-${{ matrix.target }}
+          path: .
+
+      - name: Make executable
+        run: chmod +x axiom-${{ matrix.target }}
+
+      - name: Smoke test
+        run: |
+          OUTPUT=$(./axiom-${{ matrix.target }} --version)
+          echo "Got: $OUTPUT"
+          echo "$OUTPUT" | grep -qE "^axiom [0-9]+\.[0-9]+\.[0-9]+$"
+          echo "Smoke test passed"
+
   release:
     name: Create GitHub Release
-    needs: build
+    needs: [build, test]
     runs-on: ubuntu-latest
 
     steps:
