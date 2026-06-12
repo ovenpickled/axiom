@@ -4,11 +4,7 @@ on:
   push:
     branches:
       - main
-    paths:
-      - 'docs/**'
-      - 'screenshots/**'
-    tags:
-      - 'v*.*.*'
+  workflow_dispatch:
 
 permissions:
   contents: read
