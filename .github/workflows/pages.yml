@@ -2,13 +2,14 @@ name: Deploy Pages
 
 on:
   push:
-    tags:
-      - 'v*.*.*'
-  push:
     branches:
       - main
     paths:
       - 'docs/**'
+      - 'screenshots/**'
+  push:
+    tags:
+      - 'v*.*.*'
 
 permissions:
   contents: read
@@ -29,7 +30,6 @@ jobs:
       - name: Get version
         id: version
         run: |
-          # use latest tag if triggered by tag, else use 'latest'
           if [[ "$GITHUB_REF" == refs/tags/* ]]; then
             echo "VERSION=${GITHUB_REF_NAME}" >> $GITHUB_OUTPUT
           else
@@ -39,7 +39,12 @@ jobs:
 
       - name: Inject version into site
         run: |
-          sed -i "s/v0\.1\.[0-9]\+/${{ steps.version.outputs.VERSION }}/g" docs/index.html
+          sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/${{ steps.version.outputs.VERSION }}/g" docs/index.html
+
+      - name: Copy screenshots into docs
+        run: |
+          mkdir -p docs/screenshots
+          cp screenshots/*.png docs/screenshots/
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
