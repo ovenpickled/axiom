@@ -130,3 +130,8 @@ jobs:
             artifacts/axiom-linux-aarch64/axiom-linux-aarch64
             artifacts/axiom-macos-x86_64/axiom-macos-x86_64
             artifacts/axiom-macos-aarch64/axiom-macos-aarch64
+
+  pages:
+    name: Deploy Pages
+    needs: release
+    uses: ./.github/workflows/pages.yml
