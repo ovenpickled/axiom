@@ -28,7 +28,7 @@ It supports syntax highlighting for C, C++, Python, Go, and Rust; multiple open 
 
 ## Installation
 
-**From a pre-built binary** — Download the binary for your platform from the [releases page](https://github.com/awwwyan/axiom/releases), make it executable, and move it somewhere on your `PATH`:
+**From a pre-built binary** — Download the binary for your platform from the [releases page](https://github.com/ovenpickled/axiom/releases), make it executable, and move it somewhere on your `PATH`:
 
 ```bash
 chmod +x axiom-linux-x86_64
@@ -38,7 +38,7 @@ mv axiom-linux-x86_64 ~/.local/bin/axiom
 **Build from source** — Clone the repo and build with `make`:
 
 ```bash
-git clone https://github.com/awwwyan/axiom.git
+git clone https://github.com/ovenpickled/axiom.git
 cd axiom
 make
 ```
@@ -72,8 +72,8 @@ make clean
 **Docker** — Pull from Docker Hub:
 
 ```bash
-docker pull awwwyan/axiom
-docker run -it --rm awwwyan/axiom [file]
+docker pull awwyan/axiom
+docker run -it --rm awwyan/axiom [file]
 ```
 
 Or build locally:
