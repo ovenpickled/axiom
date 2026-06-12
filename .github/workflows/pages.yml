@@ -36,11 +36,6 @@ jobs:
         run: |
           sed -i "s/v[0-9]\+\.[0-9]\+\.[0-9]\+/${{ steps.version.outputs.VERSION }}/g" docs/index.html
 
-      - name: Copy screenshots into docs
-        run: |
-          mkdir -p docs/screenshots
-          cp screenshots/*.png docs/screenshots/
-
       - name: Setup Pages
         uses: actions/configure-pages@v4
 
