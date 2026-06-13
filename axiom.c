@@ -240,6 +240,8 @@ void editorNewBuffer();
 void editorCloseBuffer();
 int parseKey(const char *keystr);
 void editorDrawTabBar(struct abuf *ab);
+int editorUpdateSyntax(erow *row);
+void editorPropagateHighlight(int start_row);
 
 /*** terminal ***/
 void die(const char *s) {
@@ -383,11 +385,11 @@ int is_separator(int c) {
   return isspace(c) || c == '\0' || strchr(",.()+-/*=~%<>[];", c) != NULL;
 }
 
-void editorUpdateSyntax(erow *row) {
+int editorUpdateSyntax(erow *row) {
   row -> hl = realloc(row -> hl, row -> rsize);
   memset(row -> hl, HL_NORMAL, row -> rsize);
 
-  if (E.syntax == NULL) return;
+  if (E.syntax == NULL) return 0;
 
   char **keywords = E.syntax -> keywords;
 
@@ -490,10 +492,19 @@ void editorUpdateSyntax(erow *row) {
     i++;
   }
 
-  int changed = (row -> hl_open_comment != in_comment);
+  int old_open = row -> hl_open_comment;
   row -> hl_open_comment = in_comment;
-  if (changed && row -> idx + 1 < E.numrows)
-    editorUpdateSyntax(&E.row[row -> idx + 1]);
+  return (row -> hl_open_comment != old_open);
+}
+
+void editorPropagateHighlight(int start_row) {
+  int i = start_row;
+  while (i < E.numrows) {
+    int prev_open = E.row[i].hl_open_comment;
+    editorUpdateSyntax(&E.row[i]);
+    if (E.row[i].hl_open_comment == prev_open) break;
+    i++;
+  }
 }
 
 int editorSyntaxToColour(int hl) {
@@ -581,7 +592,8 @@ void editorUpdateRow(erow *row) {
   row -> render[idx] = '\0';
   row -> rsize = idx;
 
-  editorUpdateSyntax(row);
+  int changed = editorUpdateSyntax(row);
+  if (changed) editorPropagateHighlight(row -> idx + 1);
 }
 
 void editorInsertRow(int at, char *s, size_t len) {
