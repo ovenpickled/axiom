@@ -220,9 +220,10 @@ struct editorSyntax HLDB[] = {
 struct abuf {
   char *b;
   int len;
+  int cap;
 };
 
-#define ABUF_INIT {NULL, 0}
+#define ABUF_INIT {NULL, 0, 0}
 
 /*** prototypes ***/
 void editorSetStatusMessage(const char *fmt, ...);
@@ -1018,11 +1019,15 @@ void editorFind() {
 }
 
 void abAppend(struct abuf *ab, const char *s, int len) {
-  char *new = realloc(ab -> b, ab -> len + len);
-
-  if (new == NULL) return;
-  memcpy(&new[ab -> len], s, len);
-  ab -> b = new;
+  if (ab -> len + len > ab -> cap) {
+    int new_cap = (ab -> cap == 0) ? 4096 : ab -> cap * 2;
+    while (new_cap < ab -> len + len) new_cap *= 2;
+    char *new_b = realloc(ab -> b, new_cap);
+    if (new_b == NULL) return;
+    ab -> b = new_b;
+    ab -> cap = new_cap;
+  }
+  memcpy(&ab -> b[ab -> len], s, len);
   ab -> len += len;
 }
 
@@ -1055,9 +1060,12 @@ void editorUpdateLinenumWidth() {
   int digits = 0;
   int n = (E.numrows > 0) ? E.numrows : 1;
   while (n) { digits++; n /= 10; }
-  E.linenum_width = digits + 2;
-  E.screencols = E.base_screencols - E.linenum_width;
+  int new_width = digits + 2;
 
+  if (new_width == E.linenum_width) return;
+
+  E.linenum_width = new_width;
+  E.screencols = E.base_screencols - E.linenum_width;
 }
 
 int editorPosInSelection(int row, int col) {
@@ -1079,7 +1087,6 @@ int editorPosInSelection(int row, int col) {
 }
 
 void editorDrawTabBar(struct abuf *ab) {
-  editorSaveCurrentBuffer();
   abAppend(ab, "\x1b[0m", 4);
 
   int fullwidth = E.screencols + E.linenum_width;
@@ -1088,6 +1095,10 @@ void editorDrawTabBar(struct abuf *ab) {
   for (int i = 0; i < E.num_bufs; i++) {
     char tab[64];
     const char *name = E.bufs[i].filename ? E.bufs[i].filename : "[No Name]";
+
+    if (i == E.cur_buf && E.filename)
+      name = E.filename;
+
     const char *slash = strrchr(name, '/');
     if (slash) name = slash + 1;
 
@@ -1096,11 +1107,15 @@ void editorDrawTabBar(struct abuf *ab) {
 
     int is_current = (i == E.cur_buf);
 
-    int effectively_empty = (E.bufs[i].numrows == 0 ||
-                            (E.bufs[i].numrows == 1 &&
-                             E.bufs[i].row != NULL &&
-                             E.bufs[i].row[0].size == 0));
-    int is_dirty = E.bufs[i].dirty && !effectively_empty;
+    int numrows = (i == E.cur_buf) ? E.numrows : E.bufs[i].numrows;
+    erow *row0   = (i == E.cur_buf) ? E.row     : E.bufs[i].row;
+    int dirty    = (i == E.cur_buf) ? E.dirty    : E.bufs[i].dirty;
+
+    int effectively_empty = (numrows == 0 ||
+                            (numrows == 1 &&
+                             row0 != NULL &&
+                             row0[0].size == 0));
+    int is_dirty = dirty && !effectively_empty;
 
     int tablen;
     if (is_current) {
@@ -1179,6 +1194,8 @@ void editorDrawRows(struct abuf *ab) {
           }
         }
         y += num_lines - 1;
+      } else {
+        abAppend(ab, "~", 1);
       }
     } else {
       char linenum[16];
