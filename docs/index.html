@@ -812,6 +812,7 @@
       <button class="itab on" onclick="swapTab(this,'binary')">binary</button>
       <button class="itab" onclick="swapTab(this,'source')">from source</button>
       <button class="itab" onclick="swapTab(this,'docker')">docker</button>
+      <button class="itab" onclick="swapTab(this,'brew')">homebrew</button>
     </div>
 
     <div class="ipanel on" id="panel-binary">
@@ -845,6 +846,18 @@
         <div><span class="p">$ </span>docker pull awwyan/axiom</div>
         <div><span class="p">$ </span>docker run -it --rm -v $(pwd):/work awwyan/axiom /work/myfile.c</div>
       </div>
+    </div>
+
+    <div class="ipanel" id="panel-brew">
+      <div class="codeblock">
+        <button class="copybtn" onclick="copyBlock(this)">copy</button>
+        <div><span class="p">$ </span>brew tap ovenpickled/axiom</div>
+        <div><span class="p">$ </span>brew install axiom</div>
+      </div>
+      <p class="platform-note">
+        Requires <a href="https://brew.sh" target="_blank" style="color:var(--purple);">Homebrew</a>.
+        Works on macOS and Linux.
+      </p>
     </div>
   </div>
 </div>
