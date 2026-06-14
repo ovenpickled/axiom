@@ -89,6 +89,7 @@ make clean
 
 ```bash
 brew tap ovenpickled/axiom
+brew trust ovenpickled/axiom
 brew install axiom
 ```
 
