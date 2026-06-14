@@ -85,6 +85,13 @@ To remove the compiled binary without uninstalling:
 make clean
 ```
 
+**Homebrew** - On macOS or Linux with [Homebrew](https://brew.sh):
+
+```bash
+brew tap ovenpickled/axiom
+brew install axiom
+```
+
 **Docker** - Pull from Docker Hub:
 
 ```bash
