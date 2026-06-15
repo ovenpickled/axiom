@@ -44,6 +44,11 @@ jobs:
         with:
           path: docs/
 
+      - name: Update sitemap lastmod
+        run: |
+          TODAY=$(date +%Y-%m-%d)
+          sed -i "s|<lastmod>.*</lastmod>|<lastmod>$TODAY</lastmod>|" docs/sitemap.xml
+
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
