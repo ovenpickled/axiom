@@ -13,6 +13,12 @@
 
 </div>
 
+<div align="center">
+
+[Website](https://axiomeditor.dev) · [Releases](https://github.com/ovenpickled/axiom/releases) · [Contributing](./CONTRIBUTING.md)
+
+</div>
+
 ---
 
 Axiom is a terminal text editor written in a single C file with no external dependencies. It runs entirely on raw terminal I/O using POSIX APIs - no ncurses, no Readline, no third-party libraries. If your system can compile C99, Axiom will build and run.
@@ -210,7 +216,7 @@ The [`Makefile`](./Makefile) compiles with `-Wall -Wextra -pedantic -std=c99` an
 
 [`screenshots/`](./screenshots/) holds the images used in this README.
 
-[`.github/workflows/`](./.github/workflows/) contains three pipelines: `release.yml` builds and publishes cross-compiled binaries for all four supported targets on every version tag and runs a smoke test on each before publishing; `docker.yml` builds and pushes the multi-arch Docker image to Docker Hub; and `pages.yml` automatically deploys the [GitHub Pages site](https://ovenpickled.github.io/axiom) on every push to main.
+[`.github/workflows/`](./.github/workflows/) contains three pipelines: `release.yml` builds and publishes cross-compiled binaries for all four supported targets on every version tag and runs a smoke test on each before publishing; `docker.yml` builds and pushes the multi-arch Docker image to Docker Hub; and `pages.yml` automatically deploys the [Website](https://axiomeditor.dev) on every push to main.
 
 ## License
 
